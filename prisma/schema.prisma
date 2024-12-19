@@ -1,0 +1,360 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                Int      @id @default(autoincrement())
+  email             String   @unique
+  password_hash     String?
+  oauth_provider    String?
+  oauth_sub         String?  @db.VarChar(255)
+  email_verified_at DateTime?
+  email_verify_token String?
+  reset_password_token String?
+  reset_password_expires DateTime?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  deleted_at        DateTime?
+
+  profile             Profile?
+  personality_result  PersonalityResult?
+  posts               Post[]
+  comments            Comment[]
+  groupsOwned         Group[]         @relation("GroupOwner")
+  groupMemberships    GroupMember[]
+  eventsOrganized     Event[]         @relation("EventOrganizer")
+  eventParticipants   EventParticipant[]
+  sentMessages        Message[]       @relation("MessagesSent")
+  receivedMessages    Message[]       @relation("MessagesReceived")
+  pointsHistory       Point[]
+  transactions        Transaction[]
+  coachSessionsAsCoach   CoachSession[]    @relation("CoachAsCoach")
+  coachSessionsAsStudent CoachSession[]    @relation("CoachAsStudent")
+  mentoringAsMentor      MentoringSession[] @relation("Mentor")
+  mentoringAsMentee      MentoringSession[] @relation("Mentee")
+  user_achievements      UserAchievement[]
+
+  followings Follows[] @relation("UserFollowings")
+  followers  Follows[] @relation("UserFollowers")
+
+  role String @default("user")
+
+  @@map("users")
+}
+
+model Profile {
+  user_id             Int     @id
+  display_name        String
+  avatar_url          String?
+  bio                 String?
+  location            String?
+  play_style          String?
+  handedness          String?
+  tennis_history      Int?
+  level_ntrp          Decimal? @db.Decimal(2,1)
+  preferred_shots     Json?
+  racket              String?
+  privacy_setting     String   @default("public")
+  notification_setting Json?
+  updated_at          DateTime @default(now())
+
+  tennis_type_name   String?
+  tennis_comment     String?
+  tennis_image_url   String?
+
+  user User @relation(fields: [user_id], references: [id])
+  @@map("profiles")
+}
+
+model Follows {
+  follower_id Int
+  followee_id Int
+  created_at  DateTime @default(now())
+
+  follower User @relation("UserFollowers", fields: [follower_id], references: [id])
+  followee User @relation("UserFollowings", fields: [followee_id], references: [id])
+
+  @@id([follower_id, followee_id])
+  @@map("follows")
+}
+
+model PersonalityResult {
+  user_id            Int     @id
+  aggressiveness     Int?
+  defensiveness      Int?
+  strategy           Int?
+  creativity         Int?
+  stability          Int?
+  mental_toughness   Int?
+  determined_type    String?
+  generated_image_url String?
+  created_at         DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+  @@map("personality_results")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String
+  parentId  Int?
+  parent    Category?  @relation("CategoryToParent", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryToParent")
+  posts     Post[]
+
+  @@map("categories")
+}
+
+model Post {
+  id           Int     @id @default(autoincrement())
+  user_id      Int
+  title        String
+  content      String
+  tags         Json?
+  best_answer_comment_id Int? @unique
+  created_at   DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+  deleted_at   DateTime?
+
+  categoryId Int? @map("category_id")
+  category   Category? @relation(fields: [categoryId], references: [id])
+  thumbnail  String?
+
+  user User @relation(fields: [user_id], references: [id])
+  comments Comment[]
+  best_answer_comment Comment? @relation("BestAnswer", fields: [best_answer_comment_id], references: [id])
+  feedbacks Feedback[]
+
+  @@map("posts")
+}
+
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  postId    Int
+  helpful   Boolean
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id])
+  @@map("feedback")
+}
+
+model Comment {
+  id                Int      @id @default(autoincrement())
+  post_id           Int
+  user_id           Int
+  parent_comment_id Int?
+  content           String
+  created_at        DateTime @default(now())
+  updated_at        DateTime @default(now())
+  deleted_at        DateTime?
+
+  post Post @relation(fields: [post_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+  parent_comment Comment? @relation("NestedComments", fields: [parent_comment_id], references: [id])
+  replies Comment[] @relation("NestedComments")
+  best_answered_in Post? @relation("BestAnswer")
+
+  @@map("comments")
+}
+
+model Group {
+  id          Int       @id @default(autoincrement())
+  owner_id    Int
+  name        String     @db.VarChar(100)
+  description String?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @default(now())
+  deleted_at  DateTime?
+
+  owner User @relation("GroupOwner", fields: [owner_id], references: [id])
+  groupMembers GroupMember[]
+  messages     Message[] @relation("GroupMessages")
+
+  @@map("groups")
+}
+
+model GroupMember {
+  group_id Int
+  user_id  Int
+  role     String   @default("member")
+  joined_at DateTime @default(now())
+
+  group Group @relation(fields: [group_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@id([group_id, user_id])
+  @@map("group_members")
+}
+
+model Event {
+  id          Int      @id @default(autoincrement())
+  organizer_id Int
+  name        String   @db.VarChar(100)
+  start_time  DateTime
+  location    String
+  fee         Int?
+  capacity    Int?
+  conditions  Json?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+  deleted_at  DateTime?
+
+  organizer User @relation("EventOrganizer", fields: [organizer_id], references: [id])
+  participants EventParticipant[]
+  messages     Message[] @relation("EventMessages")
+
+  @@map("events")
+}
+
+model EventParticipant {
+  event_id Int
+  user_id  Int
+  status   String   @default("pending")
+  joined_at DateTime @default(now())
+
+  event Event @relation(fields: [event_id], references: [id])
+  user User @relation(fields: [user_id], references: [id])
+
+  @@id([event_id, user_id])
+  @@map("event_participants")
+}
+
+model Message {
+  id          Int     @id @default(autoincrement())
+  sender_id   Int
+  receiver_id Int?
+  group_id    Int?
+  event_id    Int?
+  content     String?
+  media_url   String?
+  created_at  DateTime @default(now())
+  read_at     DateTime?
+
+  sender   User   @relation("MessagesSent", fields: [sender_id], references: [id])
+  receiver User?  @relation("MessagesReceived", fields: [receiver_id], references: [id])
+  group    Group? @relation("GroupMessages", fields: [group_id], references: [id])
+  event    Event? @relation("EventMessages", fields: [event_id], references: [id])
+
+  @@map("messages")
+}
+
+model Point {
+  id           Int     @id @default(autoincrement())
+  user_id      Int
+  change_type  String
+  amount       Int
+  balance_after Int?
+  created_at   DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+  @@map("points")
+}
+
+model Transaction {
+  id          Int     @id @default(autoincrement())
+  user_id     Int
+  type        String
+  related_id  Int?
+  amount      Int
+  status      String
+  created_at  DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+  @@map("transactions")
+}
+
+model CoachSession {
+  id             Int     @id @default(autoincrement())
+  coach_id       Int
+  student_id     Int
+  scheduled_at   DateTime
+  duration_minutes Int     @default(15)
+  fee_points     Int      @default(500)
+  status         String   @default("pending")
+  created_at     DateTime @default(now())
+  completed_at   DateTime?
+
+  coach   User @relation("CoachAsCoach", fields: [coach_id], references: [id])
+  student User @relation("CoachAsStudent", fields: [student_id], references: [id])
+
+  @@map("coach_sessions")
+}
+
+model MentoringSession {
+  id             Int     @id @default(autoincrement())
+  mentor_id      Int
+  mentee_id      Int
+  goal           String?
+  progress_notes String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now())
+
+  mentor User @relation("Mentor", fields: [mentor_id], references: [id])
+  mentee User @relation("Mentee", fields: [mentee_id], references: [id])
+
+  @@map("mentoring_sessions")
+}
+
+model Achievement {
+  id          Int     @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  icon_url    String?  @db.Text
+  conditions  Json?
+  created_at  DateTime @default(now())
+
+  users UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  user_id        Int
+  achievement_id Int
+  achieved_at    DateTime @default(now())
+
+  user        User        @relation(fields: [user_id], references: [id])
+  achievement Achievement @relation(fields: [achievement_id], references: [id])
+
+  @@id([user_id, achievement_id])
+  @@map("user_achievements")
+}
+
+model News {
+  id           Int     @id @default(autoincrement())
+  source_url   String   @db.Text
+  title        String   @db.Text
+  summary      String?  @db.Text
+  tags         Json?
+  published_at DateTime?
+  created_at   DateTime @default(now())
+
+  @@map("news")
+}
+
+model KnowledgeBase {
+  id        Int     @id @default(autoincrement())
+  type      String
+  question  String?  @db.Text
+  answer    String?  @db.Text
+  tags      Json?
+  updated_at DateTime @default(now())
+
+  @@map("knowledge_base")
+}
+
+model Video {
+  id          Int    @id @default(autoincrement())
+  title       String  @db.VarChar(200)
+  url         String  @db.Text
+  description String? @db.Text
+  tags        Json?
+  created_at  DateTime @default(now())
+
+  @@map("videos")
+}
